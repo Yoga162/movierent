@@ -1,34 +1,61 @@
-package com.example.movierent.Controller;
+package com.example.movierent.Controller; // Sesuaikan huruf besar/kecil folder kamu
+
+import com.example.movierent.Model.Rental;
 import com.example.movierent.Model.User;
+import com.example.movierent.Repository.RentalRepository;
 import com.example.movierent.Repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/user")
 public class UserController {
 
-    @Autowired private UserRepository userRepo;
+    @Autowired
+    private UserRepository userRepository; // Variabel (huruf kecil)
 
-    // REGISTER (Admin & User daftar lewat sini)
+    @Autowired
+    private RentalRepository rentalRepository; // Variabel (huruf kecil)
+
     @PostMapping("/register")
-    public User register(@RequestBody User user) {
-        // Tips: Di Frontend/Hoppscotch, field 'role' harus diisi manual "ADMIN" atau "USER"
-        return userRepo.save(user);
+    public User registerUser(@RequestBody User user) {
+        return userRepository.save(user);
     }
 
-    // LOGIN
     @PostMapping("/login")
-    public String login(@RequestBody User loginData) {
-        User userDb = userRepo.findByEmail(loginData.getEmail());
+    public Map<String, Object> login(@RequestBody Map<String, String> payload) {
+        String email = payload.get("email");
+        String password = payload.get("password");
 
-        if (userDb == null) return "Email salah!";
+        // 1. CARI USER
+        User user = userRepository.findByEmail(email);
 
-        if (userDb.getPassword().equals(loginData.getPassword())) {
-            // Beri info ID dan Role agar User/Admin tahu identitasnya
-            return "LOGIN SUKSES! ID Anda: " + userDb.getId() + ", Role: " + userDb.getRole();
-        } else {
-            return "Password salah!";
+        // 2. CEK PASSWORD
+        if (user == null || !user.getPassword().equals(password)) {
+            throw new RuntimeException("Email atau Password salah!");
         }
+
+        // --- BAGIAN INI YANG KITA UBAH ---
+        List<Rental> history; // Siapkan wadah kosong
+
+        if (user.getRole().equals("ADMIN")) {
+            // JIKA ADMIN: Ambil SEMUA data rental (Global History)
+            history = rentalRepository.findAll();
+        } else {
+            // JIKA USER BIASA: Ambil history milik dia saja
+            history = rentalRepository.findByUserId(user.getId());
+        }
+        // ---------------------------------
+
+        // 4. BUNGKUS PAKET
+        Map<String, Object> response = new HashMap<>();
+        response.put("user_info", user);
+        response.put("rental_history", history); // Isinya dinamis tergantung siapa yang login
+
+        return response;
     }
 }
