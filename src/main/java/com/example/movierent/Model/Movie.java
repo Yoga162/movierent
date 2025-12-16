@@ -9,5 +9,5 @@ public class Movie {
 
     private String title;
     private String genre;
-    private boolean isAvailable = true; // Default TRUE
+    private boolean isAvailable = true;
 }

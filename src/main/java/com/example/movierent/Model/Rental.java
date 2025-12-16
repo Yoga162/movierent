@@ -13,5 +13,5 @@ public class Rental {
     @ManyToOne @JoinColumn(name = "movie_id")
     private Movie movie;
 
-    private String status; // 'BORROWED' / 'RETURNED'
+    private String status;
 }
