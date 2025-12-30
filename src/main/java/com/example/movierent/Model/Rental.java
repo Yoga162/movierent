@@ -1,6 +1,7 @@
 package com.example.movierent.Model;
 import jakarta.persistence.*;
 import lombok.Data;
+import java.time.LocalDate;
 
 @Entity @Data @Table(name = "rentals")
 public class Rental {
@@ -14,4 +15,12 @@ public class Rental {
     private Movie movie;
 
     private String status;
+
+    private LocalDate rentalDate;
+
+    private Double rentalCost;
+
+    private LocalDate dueDate;    // Batas Waktu (Jatuh Tempo)
+    private LocalDate returnDate; // Tgl Dikembalikan Real
+    private Double penalty;       // Denda (0 kalau tepat waktu)
 }

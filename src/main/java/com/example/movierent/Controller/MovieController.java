@@ -3,8 +3,13 @@ import com.example.movierent.Model.*;
 import com.example.movierent.Repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 @RestController
 @RequestMapping("/movie")
@@ -38,9 +43,29 @@ public class MovieController {
     }
 
     // all movies (public)
-    @GetMapping("/all")
-    public List<Movie> getAll() {
-        return movieRepo.findAll();
+    @GetMapping({"/list", "/list/{page}"})
+    public Map<String, Object> getListMovies(@PathVariable(required = false) Integer page) {
+
+        if (page == null || page < 1) {
+            page = 1;
+        }
+
+        int limit = 2;
+
+        Pageable pageable = PageRequest.of(page - 1, limit, Sort.by("title"));
+        Page<Movie> moviePage = movieRepo.findAll(pageable);
+
+        Map<String, Object> response = new HashMap<>();
+
+        // Masukkan List Filmnya
+        response.put("data_movies", moviePage.getContent());
+
+        // Masukkan Info Halaman yang PENTING saja
+        response.put("halaman_sekarang", page);
+        response.put("total_halaman", moviePage.getTotalPages());
+        response.put("total_film", moviePage.getTotalElements());
+
+        return response;
     }
 
     //update movie (only admin)

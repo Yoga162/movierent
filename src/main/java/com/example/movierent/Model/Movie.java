@@ -9,5 +9,6 @@ public class Movie {
 
     private String title;
     private String genre;
-    private boolean isAvailable = true;
+    private boolean available = true;
+    private Double price;
 }
