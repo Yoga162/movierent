@@ -11,4 +11,5 @@ public class Movie {
     private String genre;
     private boolean available = true;
     private Double price;
+    private boolean deleted = false;
 }

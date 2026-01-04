@@ -1,4 +1,5 @@
 package com.example.movierent.Controller;
+
 import com.example.movierent.Model.*;
 import com.example.movierent.Repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,7 +9,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -63,22 +64,31 @@ public class RentalController {
         rental.setDueDate(today.plusDays(days));
 
         // Set Uang
-        rental.setRentalCost(totalBiaya); // <--- UANG MASUK SINI
+        rental.setRentalCost(totalBiaya);
         rental.setPenalty(0.0);
 
         // 5. Update Movie & Save
         movie.setAvailable(false);
         movieRepo.save(movie);
-        rentalRepo.save(rental);
+        rentalRepo.save(rental); // ID Transaksi terbentuk di sini
 
-        // 6. Buat Respon Struk Pembayaran (JSON Rapi)
-        Map<String, Object> response = new HashMap<>();
+        // 6. Buat Respon Struk Pembayaran
+        // Gunakan LinkedHashMap agar urutan JSON rapi (ID Transaksi di paling atas)
+        Map<String, Object> response = new LinkedHashMap<>();
+
+        // --- [NEW] Tampilkan ID Transaksi paling atas ---
+        response.put("id_transaksi", rental.getId());
+        // -----------------------------------------------
+
         response.put("message", "Transaksi Berhasil!");
         response.put("judul_film", movie.getTitle());
         response.put("peminjam", user.getName());
         response.put("lama_pinjam", days + " hari");
-        response.put("biaya_per_hari", hargaPerHari);
-        response.put("TOTAL_BAYAR", totalBiaya); // <--- INI YG PENTING
+
+        // Format Rupiah
+        response.put("biaya_per_hari", formatRupiah(hargaPerHari));
+        response.put("TOTAL_BAYAR", formatRupiah(totalBiaya));
+
         response.put("jatuh_tempo", rental.getDueDate());
 
         return response;
@@ -110,7 +120,6 @@ public class RentalController {
 
         if (terlambat > 0) {
             // Jika terlambat (angka positif), kena denda Rp 10.000 per hari
-            // Kamu bisa ganti 10000 dengan angka lain sesuai keinginan
             denda = terlambat * 10000;
         }
 
@@ -125,19 +134,22 @@ public class RentalController {
         rentalRepo.save(rental);
 
         // 7. Buat Struk / Respon JSON
-        Map<String, Object> response = new HashMap<>();
+        // Gunakan LinkedHashMap agar rapi
+        Map<String, Object> response = new LinkedHashMap<>();
         response.put("status", "Berhasil dikembalikan");
+        response.put("id_transaksi", rental.getId()); // Tampilkan ID juga saat return
         response.put("judul_film", movie.getTitle());
         response.put("nama_peminjam", rental.getUser().getName());
         response.put("tgl_jatuh_tempo", rental.getDueDate());
         response.put("tgl_dikembalikan", rental.getReturnDate());
 
+        // Gunakan formatRupiah untuk denda
         if (terlambat > 0) {
             response.put("keterangan", "TERLAMBAT " + terlambat + " HARI");
-            response.put("TOTAL_DENDA", denda);
+            response.put("TOTAL_DENDA", formatRupiah(denda));
         } else {
             response.put("keterangan", "Tepat Waktu (Terima kasih)");
-            response.put("TOTAL_DENDA", 0);
+            response.put("TOTAL_DENDA", "Rp0");
         }
 
         return response;
@@ -177,28 +189,42 @@ public class RentalController {
         // Ambil Data
         List<Rental> rawRentals = rentalRepo.findByRentalDateBetween(startDate, now);
 
+        // List untuk menampung data yang rapi
         List<Map<String, Object>> cleanData = new ArrayList<>();
 
         for (Rental rental : rawRentals) {
-            Map<String, Object> item = new HashMap<>();
+            // Gunakan LinkedHashMap agar urutan kolom laporan rapi
+            Map<String, Object> item = new LinkedHashMap<>();
 
-            // Kita pilih manual field apa saja yang mau ditampilkan
             item.put("id_transaksi", rental.getId());
             item.put("tanggal_sewa", rental.getRentalDate());
-            item.put("nama_peminjam", rental.getUser().getName()); // Ambil Namanya saja
-            item.put("judul_film", rental.getMovie().getTitle());  // Ambil Judulnya saja
+            item.put("nama_peminjam", rental.getUser().getName());
+            item.put("judul_film", rental.getMovie().getTitle());
             item.put("status", rental.getStatus());
+
+            // Tambahan info harga di laporan (opsional)
+            item.put("biaya_sewa", formatRupiah(rental.getRentalCost()));
+            item.put("denda", formatRupiah(rental.getPenalty()));
 
             cleanData.add(item);
         }
 
-        Map<String, Object> report = new HashMap<>();
+        Map<String, Object> report = new LinkedHashMap<>();
         report.put("judul_laporan", "Laporan " + type);
-        report.put("periode_awal", startDate); // Bonus: Biar tau dari tanggal brp
+        report.put("periode_awal", startDate);
         report.put("periode_akhir", now);
         report.put("total_transaksi", rawRentals.size());
-        report.put("data_transaksi", cleanData); // Masukkan
+        report.put("data_transaksi", cleanData);
 
         return report;
+    }
+
+    // --- Helper Function Format Rupiah ---
+    // Output: "Rp50.000" (Tanpa spasi, pakai titik)
+    private String formatRupiah(Double angka) {
+        if (angka == null) return "Rp0";
+        // String format "%,.0f" akan membuat format seperti 50,000
+        // Lalu replace ',' menjadi '.' agar sesuai format Indonesia (50.000)
+        return String.format("Rp%,.0f", angka).replace(',', '.');
     }
 }

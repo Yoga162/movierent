@@ -1,15 +1,17 @@
 package com.example.movierent.Controller;
+
 import com.example.movierent.Model.*;
 import com.example.movierent.Repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/movie")
@@ -22,6 +24,7 @@ public class MovieController {
         public Long adminId;
         public String title;
         public String genre;
+        public Double price;
     }
 
 
@@ -38,6 +41,12 @@ public class MovieController {
         Movie movie = new Movie();
         movie.setTitle(form.title);
         movie.setGenre(form.genre);
+        movie.setPrice(form.price);
+
+        // --- [SOFT DELETE] Set default status deleted = false ---
+        movie.setDeleted(false);
+        // --------------------------------------------------------
+
         movieRepo.save(movie);
         return "SUKSES menambahkan film: " + form.title;
     }
@@ -52,48 +61,87 @@ public class MovieController {
 
         int limit = 2;
 
-        Pageable pageable = PageRequest.of(page - 1, limit, Sort.by("title"));
-        Page<Movie> moviePage = movieRepo.findAll(pageable);
+        // Sort by ID Ascending
+        Pageable pageable = PageRequest.of(page - 1, limit, Sort.by("id"));
 
-        Map<String, Object> response = new HashMap<>();
+        // --- [SOFT DELETE] Gunakan findByDeletedFalse ---
+        // Agar film yang sudah dihapus tidak muncul di list
+        Page<Movie> moviePage = movieRepo.findByDeletedFalse(pageable);
+        // ------------------------------------------------
 
-        // Masukkan List Filmnya
-        response.put("data_movies", moviePage.getContent());
+        // --- Pakai LinkedHashMap agar urutan JSON rapi ---
+        List<Map<String, Object>> formattedMovies = new ArrayList<>();
 
-        // Masukkan Info Halaman yang PENTING saja
+        for (Movie m : moviePage.getContent()) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", m.getId());
+            item.put("title", m.getTitle());
+            item.put("genre", m.getGenre());
+            item.put("available", m.isAvailable());
+
+            // Format Price Konsisten
+            item.put("price", formatRupiah(m.getPrice()));
+
+            formattedMovies.add(item);
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
         response.put("halaman_sekarang", page);
         response.put("total_halaman", moviePage.getTotalPages());
         response.put("total_film", moviePage.getTotalElements());
+        response.put("data_movies", formattedMovies);
 
         return response;
     }
 
-    //update movie (only admin)
+    // update movie (only admin)
     @PutMapping("/update/{movieId}")
-    public Movie updateMovie(@PathVariable Long movieId, @RequestBody Map<String, Object> payload) {
+    public Map<String, Object> updateMovie(@PathVariable Long movieId, @RequestBody Map<String, Object> payload) {
 
         Long adminId = Long.valueOf(payload.get("adminId").toString());
         User admin = userRepo.findById(adminId).orElse(null);
 
+        //Validasi Admin
         if (admin == null || !admin.getRole().equals("ADMIN")) {
             throw new RuntimeException("GAGAL: Kamu bukan Admin! Tidak boleh edit film.");
         }
 
+        //Validasi movie
         Movie movie = movieRepo.findById(movieId).orElse(null);
         if (movie == null) {
             throw new RuntimeException("Film tidak ditemukan!");
         }
 
-        String newTitle = payload.get("title").toString();
-        String newGenre = payload.get("genre").toString();
+        // Cek dan update Title
+        if (payload.get("title") != null) {
+            movie.setTitle(payload.get("title").toString());
+        }
 
-        movie.setTitle(newTitle);
-        movie.setGenre(newGenre);
+        // Cek dan update Genre
+        if (payload.get("genre") != null) {
+            movie.setGenre(payload.get("genre").toString());
+        }
 
-        return movieRepo.save(movie);
+        // Cek dan Update Harga
+        if (payload.get("price") != null) {
+            Double newPrice = Double.valueOf(payload.get("price").toString());
+            movie.setPrice(newPrice);
+        }
+
+        Movie savedMovie = movieRepo.save(movie);
+
+        // --- Pakai LinkedHashMap agar urutan rapi ---
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("id", savedMovie.getId());
+        response.put("title", savedMovie.getTitle());
+        response.put("genre", savedMovie.getGenre());
+        response.put("available", savedMovie.isAvailable());
+        response.put("price", formatRupiah(savedMovie.getPrice()));
+
+        return response;
     }
 
-    // delete movie (only admin)
+    // --- [SOFT DELETE] Ubah Method Delete ---
     @DeleteMapping("/delete/{id}")
     public String deleteMovie(@PathVariable Long id, @RequestParam Long adminId) {
         User admin = userRepo.findById(adminId).orElse(null);
@@ -102,7 +150,23 @@ public class MovieController {
             return "GAGAL: Hanya Admin yang boleh menghapus!";
         }
 
-        movieRepo.deleteById(id);
-        return "Movie berhasil dihapus";
+        Movie movie = movieRepo.findById(id).orElse(null);
+        if (movie == null) {
+            return "Film tidak ditemukan!";
+        }
+
+        // BUKAN deleteById, tapi update status
+        movie.setDeleted(true);      // Tandai terhapus
+        movie.setAvailable(false);   // Pastikan tidak bisa dipinjam lagi
+
+        movieRepo.save(movie);
+
+        return "Movie berhasil dihapus.";
+    }
+
+    // --- Helper Function ---
+    private String formatRupiah(Double angka) {
+        if (angka == null) return "Rp0";
+        return String.format("Rp%,.0f", angka).replace(',', '.');
     }
 }
