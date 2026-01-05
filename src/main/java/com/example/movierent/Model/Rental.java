@@ -13,14 +13,10 @@ public class Rental {
 
     @ManyToOne @JoinColumn(name = "movie_id")
     private Movie movie;
-
     private String status;
-
     private LocalDate rentalDate;
-
     private Double rentalCost;
-
-    private LocalDate dueDate;    // Batas Waktu (Jatuh Tempo)
-    private LocalDate returnDate; // Tgl Dikembalikan Real
-    private Double penalty;       // Denda (0 kalau tepat waktu)
+    private LocalDate dueDate;
+    private LocalDate returnDate;
+    private Double penalty;
 }

@@ -7,7 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MovieRepository extends JpaRepository<Movie, Long> {
 
-    // Query khusus untuk Soft Delete:
-    // Hanya ambil film yang deleted = false (yang masih aktif)
+
     Page<Movie> findByDeletedFalse(Pageable pageable);
 }
